@@ -1,6 +1,6 @@
 # Magventure TMS Control from Python (version 2025.08.01)
 
-import pytms
+  import pytms
 
 # T = pytms.TMS()
 Fully control the Magventure TMS at Terminal or from code.
@@ -17,4 +17,5 @@ GUI to control Magventure machine using TMS().
 # pytms.rMT()
 Estimate resting motor threshold using TMS().
 This function also requires to install matplotlib module.
+
 The hardware to record EMG is RTBox. RTBox information can be found [here](https://github.com/xiangruili/RTBox/blob/master/doc/RTBox_v56_user_manual.pdf). 

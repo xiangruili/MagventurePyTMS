@@ -1,4 +1,4 @@
-# Magventure TMS Control from Python (version 2025.08.01)
+# Magventure TMS Control from Python
 
   import pytms
 

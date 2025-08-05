@@ -5,12 +5,9 @@
 
 import serial # pySerial is the only non-builtin module for TMS and GUI
 from serial.tools.list_ports import comports
-from math import ceil
-from time import sleep
 import json
 import threading
 
-from os import path
 import tkinter as tk
 from tkinter import filedialog,ttk # ttk for Combobox only
 from idlelib.tooltip import Hovertip
@@ -24,120 +21,11 @@ try: # allow TMS() and TMS_GUI() to work without matplotlib
 except:
     print("matplotlib module needed for motor threshold test")
 
-__version__ = "2025.07.31"
+path = serial.os.path
+sleep = serial.time.sleep
+
+__version__ = "2025.08.05"
 __all__ = ['TMS', 'TMS_GUI', 'rMT', 'EMGCheck']
-
-class trainParam:
-    '''Train parameters object'''
-    __slots__ = ('_TimingControl', '_RepRate', '_PulsesInTrain', '_NumberOfTrains',\
-                 '_ITI', '_PriorWarningSound', '_RampUp', '_RampUpTrains')
-    
-    def __init__(obj):
-        obj._TimingControl = "Sequence"
-        obj._RepRate = 1.0
-        obj._PulsesInTrain = 5
-        obj._NumberOfTrains = 3
-        obj._ITI = 1.0
-        obj._PriorWarningSound = True
-        obj._RampUp = 1.0
-        obj._RampUpTrains = 10
-
-    @property
-    def TimingControl(obj):
-        '''Timing control options'''
-        return obj._TimingControl
-
-    @TimingControl.setter
-    def TimingControl(obj, arg):
-        if obj._TimingControl==arg: return
-        try: k = TMS._INS._TCs.index(arg)
-        except: assert [], "Valid TimingControl input: "+lists(TMS._INS._TCs)
-        obj._TimingControl = arg
-        TMS._INS._setTrain()
-
-    @property
-    def RepRate(obj):
-        '''Number of pulses per second in each train'''
-        return obj._RepRate
-
-    @RepRate.setter
-    def RepRate(obj, arg):
-        if obj._RepRate==arg: return
-        obj._RepRate,dev = closestVal(arg, TMS._INS._RATEs) # pps
-        if dev>0.001: print(f"RepRate adjusted to {obj._RepRate}")
-        TMS._INS._setTrain()
-        
-    @property
-    def PulsesInTrain(obj):
-        '''Number of pulses per second in each train'''
-        return obj._PulsesInTrain
-
-    @PulsesInTrain.setter
-    def PulsesInTrain(obj, arg):
-        if obj._PulsesInTrain==arg: return
-        rg = (*range(1,1001), *range(1100,2001,100))
-        obj._PulsesInTrain,dev = closestVal(arg, rg)
-        if dev>0.001: print(f"PulsesInTrain adjusted to {obj._PulsesInTrain}")
-        TMS._INS._setTrain()
-        
-    @property
-    def NumberOfTrains(obj):
-        '''Number of Trains in the sequence'''
-        return obj._NumberOfTrains
-
-    @NumberOfTrains.setter
-    def NumberOfTrains(obj, arg):
-        if obj._NumberOfTrains==arg: return
-        obj._NumberOfTrains,dev = closestVal(arg, range(1,501))
-        if dev>0.001: print(f"NumberOfTrains adjusted to {obj._NumberOfTrains}")
-        TMS._INS._setTrain()
-
-    @property
-    def ITI(obj):
-        '''Inter Train Interval in seconds'''
-        return obj._ITI
-
-    @ITI.setter
-    def ITI(obj, arg):
-        if obj._ITI==arg: return
-        obj._ITI,dev = closestVal(arg, frange(0.1, 300.01, 0.1))
-        if dev>0.001: print(f"ITI adjusted to {obj._ITI}")
-        TMS._INS._setTrain()
-        
-    @property
-    def PriorWarningSound(obj):
-        # Sound warning before each train if True
-        return obj._PriorWarningSound
-
-    @PriorWarningSound.setter
-    def PriorWarningSound(obj, arg):
-        if obj._PriorWarningSound==bool(arg): return
-        obj._PriorWarningSound = bool(arg)
-        TMS._INS._setTrain()
-        
-    @property
-    def RampUp(obj):
-        '''A factor of 0.7~1.0 setting the level for the first Train'''
-        return obj._RampUp
-
-    @RampUp.setter
-    def RampUp(obj, arg):
-        if obj._RampUp==arg: return
-        obj._RampUp,dev = closestVal(arg, frange(0.7, 1.01, 0.05))
-        if dev>0.001: print(f"RampUp adjusted to {obj._RampUp}")
-        TMS._INS._setTrain()
-        
-    @property
-    def RampUpTrains(obj):
-        # Number of trains during which the Ramp up function is active
-        return obj._RampUpTrains
-
-    @RampUpTrains.setter
-    def RampUpTrains(obj, arg):
-        if obj._RampUpTrains==arg: return
-        obj._RampUpTrains,dev = closestVal(arg, range(1,11))
-        if dev>0.001: print(f"RampUpTrains adjusted to {obj._RampUpTrains}")
-        TMS._INS._setTrain()
 
 class TMS:
     """TMS controls Magventure TMS system (tested under X100).
@@ -209,6 +97,7 @@ class TMS:
         self._train = trainParam()
 
         for p in comports():
+            if "bluetooth" in p[0].lower(): continue
             try: ser = serial.Serial(p[0], 38400, timeout=0.3)
             except: continue
             ser.write(bytes((254,1,0,0,255))); sleep(0.1)
@@ -333,7 +222,7 @@ class TMS:
     def mode(self, arg):
         if self._mode==arg: return
         k = key(self._MODEs, arg)
-        assert k is not None, "Valid mode input: "+lists(self._MODEs)
+        assert k>=0, "Valid mode input: "+lists(self._MODEs)
         self._mode = arg
         self._setParam9()
 
@@ -346,7 +235,7 @@ class TMS:
     def currentDirection(self, arg):
         if self._curDirs==arg: return
         k = key(self._curDirs, arg)
-        assert k is not None, "Valid CurrentDirection input: "+lists(self._curDirs)
+        assert k>=0, "Valid CurrentDirection input: "+lists(self._curDirs)
         self._currentDirection = arg
         self._setParam9()
 
@@ -359,7 +248,7 @@ class TMS:
     def waveform(self, arg):
         if self._waveform==arg: return
         k = key(self._wvForms, arg)
-        assert k is not None, "Valid waveform input: "+lists(self._wvForms)
+        assert k>=0, "Valid waveform input: "+lists(self._wvForms)
         self._waveform = arg
         self._setParam9()
 
@@ -407,7 +296,7 @@ class TMS:
     @page.setter
     def page(self, arg):
         k = key(self._PAGEs, arg);
-        assert k is not None, "Valid page input: "+lists(self._PAGEs)
+        assert k>=0, "Valid page input: "+lists(self._PAGEs)
         self._page = arg
         self._write((7, k))
         self._write((12, 0))
@@ -505,7 +394,7 @@ class TMS:
         '''Total time to run the sequence, based on train parameters'''
         S = self.train
         ss = ((S._PulsesInTrain-1)/S._RepRate + S._ITI) * S._NumberOfTrains - S._ITI
-        mm,ss = divmod(ceil(ss), 60)
+        mm,ss = divmod(round(ss), 60)
         return f"{mm:02d}:{ss:02d}"
 
     def resync(self):
@@ -701,11 +590,10 @@ def CRC8(u8):
     '''Compute CRC8 (Dallas/Maxim) checksum for polynomial x^8 + x^5 + x^4 + 1'''
     if not hasattr(CRC8, "C8"): # cache CRC8 for 0:256
         CRC8.C8 = bytearray(256)
-        poly8 = 0b100011001 # LE
         for c in range(1,256):
             a = c
             for i in range(8):
-                if a&1: a ^= poly8
+                if a&1: a ^= 0b100011001 # poly8 LE
                 a >>= 1
             CRC8.C8[c] = a
     rst = CRC8.C8[0]
@@ -727,7 +615,7 @@ def key(D, val):
     '''Return the key for val in dict (unique keys and values)'''
     for k,v in D.items():
         if v == val: return k
-    return None
+    return -1
 
 def lists(D):
     '''Return joined dict or tuple values for error message'''
@@ -736,8 +624,10 @@ def lists(D):
 
 def frange(start, stop, step):
     '''float version of range(). Rounded to 2 decimal digits (for TMS())'''
-    return [round(x*step+start, 2) for x in range(ceil((stop-start)/step))]
-
+    f = (stop-start) / step
+    n = int(f)
+    if n<f: n += 1
+    return [round(x*step+start, 2) for x in range(n)]
 
 ## Next Section for motor threshold ##
 def rMT(startAmp=None):
@@ -871,7 +761,8 @@ def rMT(startAmp=None):
 
 class EMGCheck:
     '''Work like an oscilliscope to show trace from RTBoxADC()'''
-    def __init__(self):
+    def __init__(self, roll=False):
+        self.roll = roll
         self.i = 0
         self.count = 0
         self.N = 7200
@@ -911,19 +802,22 @@ class EMGCheck:
         if self.count>=288:
             self.ADC.start() # start conversion again
             self.count = 0
-        N = self.i + len(y)
-        if N<self.N: 
-            self.y[self.i:N] = y
-        else:
-            N -= self.N
-            j = self.N - self.i
-            self.y[self.i:] = y[:j]
-            self.y[:N] = y[j:]
 
-        self.i = N
+        if self.roll:
+            self.y = np.concatenate((self.y[len(y):], y))
+        else:
+            N = self.i + len(y)
+            if N<self.N: 
+                self.y[self.i:N] = y
+            else:
+                N -= self.N
+                j = self.N - self.i
+                self.y[self.i:] = y[:j]
+                self.y[:N] = y[j:]
+            self.i = N
+
         self.line.set_ydata(self.y)
         self.fig.canvas.draw_idle()
-        # plt.draw() # this gives warning when fig closed
 
 class RTBoxADC:
     '''Return handle for RTBoxADC.
@@ -946,6 +840,7 @@ class RTBoxADC:
     def __init__(self):
         if RTBoxADC._INS: return
         for p in comports():
+            if "bluetooth" in p[0].lower(): continue # too slow to close for MAC
             try: ser = serial.Serial(p[0], 115200, timeout=0.3)
             except: continue
             ser.write(b'R'); sleep(0.1) # in case in ADC
@@ -991,6 +886,118 @@ class RTBoxADC:
         b = self._port.read(N)
         return byte2vol(b)
 
+class trainParam:
+    '''Train parameters object'''
+    __slots__ = ('_TimingControl', '_RepRate', '_PulsesInTrain', '_NumberOfTrains',\
+                 '_ITI', '_PriorWarningSound', '_RampUp', '_RampUpTrains')
+    
+    def __init__(obj):
+        obj._TimingControl = "Sequence"
+        obj._RepRate = 1.0
+        obj._PulsesInTrain = 5
+        obj._NumberOfTrains = 3
+        obj._ITI = 1.0
+        obj._PriorWarningSound = True
+        obj._RampUp = 1.0
+        obj._RampUpTrains = 10
+
+    @property
+    def TimingControl(obj):
+        '''Timing control options'''
+        return obj._TimingControl
+
+    @TimingControl.setter
+    def TimingControl(obj, arg):
+        if obj._TimingControl==arg: return
+        try: k = TMS._INS._TCs.index(arg)
+        except: assert [], "Valid TimingControl input: "+lists(TMS._INS._TCs)
+        obj._TimingControl = arg
+        TMS._INS._setTrain()
+
+    @property
+    def RepRate(obj):
+        '''Number of pulses per second in each train'''
+        return obj._RepRate
+
+    @RepRate.setter
+    def RepRate(obj, arg):
+        if obj._RepRate==arg: return
+        obj._RepRate,dev = closestVal(arg, TMS._INS._RATEs) # pps
+        if dev>0.001: print(f"RepRate adjusted to {obj._RepRate}")
+        TMS._INS._setTrain()
+        
+    @property
+    def PulsesInTrain(obj):
+        '''Number of pulses per second in each train'''
+        return obj._PulsesInTrain
+
+    @PulsesInTrain.setter
+    def PulsesInTrain(obj, arg):
+        if obj._PulsesInTrain==arg: return
+        rg = (*range(1,1001), *range(1100,2001,100))
+        obj._PulsesInTrain,dev = closestVal(arg, rg)
+        if dev>0.001: print(f"PulsesInTrain adjusted to {obj._PulsesInTrain}")
+        TMS._INS._setTrain()
+        
+    @property
+    def NumberOfTrains(obj):
+        '''Number of Trains in the sequence'''
+        return obj._NumberOfTrains
+
+    @NumberOfTrains.setter
+    def NumberOfTrains(obj, arg):
+        if obj._NumberOfTrains==arg: return
+        obj._NumberOfTrains,dev = closestVal(arg, range(1,501))
+        if dev>0.001: print(f"NumberOfTrains adjusted to {obj._NumberOfTrains}")
+        TMS._INS._setTrain()
+
+    @property
+    def ITI(obj):
+        '''Inter Train Interval in seconds'''
+        return obj._ITI
+
+    @ITI.setter
+    def ITI(obj, arg):
+        if obj._ITI==arg: return
+        obj._ITI,dev = closestVal(arg, frange(0.1, 300.01, 0.1))
+        if dev>0.001: print(f"ITI adjusted to {obj._ITI}")
+        TMS._INS._setTrain()
+        
+    @property
+    def PriorWarningSound(obj):
+        # Sound warning before each train if True
+        return obj._PriorWarningSound
+
+    @PriorWarningSound.setter
+    def PriorWarningSound(obj, arg):
+        if obj._PriorWarningSound==bool(arg): return
+        obj._PriorWarningSound = bool(arg)
+        TMS._INS._setTrain()
+        
+    @property
+    def RampUp(obj):
+        '''A factor of 0.7~1.0 setting the level for the first Train'''
+        return obj._RampUp
+
+    @RampUp.setter
+    def RampUp(obj, arg):
+        if obj._RampUp==arg: return
+        obj._RampUp,dev = closestVal(arg, frange(0.7, 1.01, 0.05))
+        if dev>0.001: print(f"RampUp adjusted to {obj._RampUp}")
+        TMS._INS._setTrain()
+        
+    @property
+    def RampUpTrains(obj):
+        # Number of trains during which the Ramp up function is active
+        return obj._RampUpTrains
+
+    @RampUpTrains.setter
+    def RampUpTrains(obj, arg):
+        if obj._RampUpTrains==arg: return
+        obj._RampUpTrains,dev = closestVal(arg, range(1,11))
+        if dev>0.001: print(f"RampUpTrains adjusted to {obj._RampUpTrains}")
+        TMS._INS._setTrain()
+
 def byte2vol(b):
     # 5-bytes packet is for 4 samples (10 bits): 5th for higher 2 bit for other four
     b = np.frombuffer(b, dtype=np.uint8)
@@ -1015,22 +1022,20 @@ def bandpass(x, band=[5,500], fs=3600):
 
 
 ## Next section for GUI ##
-class labelWidget(tk.Frame):
-    '''Place label at left of widget. widget and label share tooktip/enable/disable.
-    Syntax: obj = labelWidget(widget, label_text, tooltip_text)'''
+class addLabel:
+    '''Place label at left of widget. widget and label share tooltip/enable/disable.'''
     def __init__(self, widget, label_text, tooltip_text=""):
-        super().__init__(widget.master)
         self.widget = widget
-        self.label = tk.Label(widget.master, text=label_text, anchor="e")
-        widget.update() # update winfo
-        self.label.place(x=1, y=widget.winfo_y()-16, width=widget.winfo_x()-6)
+        self.label = tk.Label(widget.master, text=label_text, anchor="se")
+        p = widget.place_info()
+        self.label.place(x=1, y=p['y'], width=int(p['x'])-4, height=p['height'])
         if tooltip_text:
             Hovertip(self.label, tooltip_text)
             Hovertip(widget, tooltip_text)
 
     def disable(self):
         '''Disable widget and its label'''
-        self.label.config(foreground="gray")
+        self.label.config(foreground="gray") # looks disabled
         self.widget.config(state="disabled")
 
     def enable(self):
@@ -1043,8 +1048,8 @@ class TMS_GUI:
     """
     TMS_GUI() shows and controls the Magventure TMS parameters. 
     
-    While TMS() works independently in script or command line, TMS_GUI is only an
-    interface to show and control the stimulator through TMS().
+    While TMS() works independently in script or command line, TMS_GUI() is only
+    an interface to show and control the stimulator through TMS().
     
     The control panel contains help information for each parameter and item. By
     hovering mouse onto an item for a second, the help will show up.
@@ -1053,16 +1058,16 @@ class TMS_GUI:
     will update after stimulation is applied.
     
     The Basic Control panel contains common basic parameters. The Burst Parameters
-    are active only for Waveform of Biphasic Burst. The Train Control panel contains
-    the parameters for train stimulation.
+    are active only for Waveform of Biphasic Burst. The Train Control panel 
+    contains the parameters for train stimulation.
     
     All parameter change will be effective immediately at the stimulator.
     
-    From File menu, the parameters can be saved to a file, so they can be loaded
-    for the future sessions. The "Load" function will send all parameters to the
-    stimulator. Then once the desired amplitude is set, it is ready to "Trig" a
-    pulse/burst or "Start Train". This is the easy and safe way to set up all
-    parameters.
+    From File menu, the parameters can be saved to a JSON file, so they can be 
+    loaded for the future sessions. The "Load" function will send all parameters 
+    to the stimulator. Then once the desired amplitude is set, it is ready to 
+    "Trig" a pulse/burst or "Start Train". This is the easy and safe way to set 
+    up all parameters.
     
     From Serial menu, one can Resync status from the stimulator, in case any
     parameter is changed at the stimulator (strongly discouraged). One can also
@@ -1082,10 +1087,6 @@ class TMS_GUI:
     def __init__(self):
         TMS_GUI._INS = self
         self.root = tk.Tk()
-        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
-        # self.root.title("NotConnected")
-        self.root.option_add("*Font", "Helvetica 9 normal")
-
         self.amplitude = tk.IntVar(self.root, 0)
         self.BARatio = tk.StringVar(self.root, "1")
         self.burstPulses = tk.IntVar(self.root, 3)
@@ -1100,8 +1101,8 @@ class TMS_GUI:
     def create_GUI(self):
         T = TMS()
         def enable(): T.enabled = not T.enabled
-        def amplitude_cb(): T.amplitude = self.amplitude.get()
-        def burstPulses_cb(): T.burstPulses = self.burstPulses.get()
+        def amplitude_cb(_=0): T.amplitude = self.amplitude.get()
+        def burstPulses_cb(_=0): T.burstPulses = self.burstPulses.get()
         def mode_cb(_): T.mode = self.mode.get()
         def currentDirection_cb(_): T.currentDirection = self.currentDirection.get()
         def waveform_cb(_): T.waveform = self.waveform.get()
@@ -1113,14 +1114,19 @@ class TMS_GUI:
         def ITI_cb(_): T.train.ITI = float(self.ITI.get())
         def PriorWarningSound_cb(): T.train.PriorWarningSound = self.PriorWarningSound.get()
 
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        dFontSz = 3 if "darwin" in tk.sys.platform else 0 # arbituary adjustment for MAC
+        fnt = ('Helvetica', 9+dFontSz, 'bold')
+        self.root.option_add("*Font", f"Helvetica {9+dFontSz} normal")
         fNam = path.join(path.dirname(path.abspath(__file__)),'TIcon.png')
-        self.root.iconphoto(False, tk.PhotoImage(file=fNam))
+        try: self.root.iconphoto(False, tk.PhotoImage(file=fNam))
+        except: pass
         self.root.geometry("490x406+100+500")
         self.root.resizable(False, False)
 
-        self.enable_txt = tk.Label(self.root, text="Disabled")
+        self.enable_txt = tk.Label(self.root, text="Disabled", font=fnt)
         self.enable_txt.place(x=31, y=10, width=62, height=32)
-        enabled = tk.Button(self.root, text=chr(11096), command=enable, font=("Helvetica", 12))
+        enabled = tk.Button(self.root, text=chr(11096), command=enable, font=("Helvetica", 12+dFontSz))
         enabled.place(x=94, y=10, width=32, height=32)
         Hovertip(enabled, 'Push to enable/disable stimulation')
     
@@ -1133,36 +1139,36 @@ class TMS_GUI:
         Hovertip(self.EMGcheck, 'Show continuous EMG trace')
 
         self.motorThr = tk.Button(self.root, text="Motor Threshold", command=rMT)
-        self.motorThr.place(x=136, y=53, width=101, height=24)
+        self.motorThr.place(x=131, y=53, width=106, height=24)
         Hovertip(self.motorThr, 'Start motor threshold estimate')
 
         # Basic Control
-        basic_frame = tk.LabelFrame(self.root, text="Basic Control", relief=tk.RIDGE, font=('Helvetica', 9, 'bold'))
-        basic_frame.place(x=31, y=90, width=206, height=178)
+        basicFrame = tk.LabelFrame(self.root, text="Basic Control", relief=tk.RIDGE, font=fnt)
+        basicFrame.place(x=31, y=90, width=206, height=178)
     
-        amplitude = tk.Spinbox(basic_frame, from_=0, to=100, justify=tk.RIGHT, command=amplitude_cb, textvariable=self.amplitude)
+        amplitude = tk.Spinbox(basicFrame, from_=0, to=100, justify=tk.RIGHT, command=amplitude_cb, textvariable=self.amplitude)
         amplitude.place(x=156, y=10, width=40, height=22)
         amplitude.bind("<Return>", amplitude_cb)
         amplitude.bind("<FocusOut>", amplitude_cb)
-        labelWidget(amplitude, "Amplitude (%)", 'Stimulation amplitude in percent')
+        addLabel(amplitude, "Amplitude (%)", 'Stimulation amplitude in percent')
         
-        self.mode = ttk.Combobox(basic_frame, values=("Standard",), state="readonly")
+        self.mode = ttk.Combobox(basicFrame, values=("Standard",), state="readonly")
         self.mode.place(x=112, y=40, width=84, height=22)
         self.mode.current(0)
         self.mode.bind("<<ComboboxSelected>>", mode_cb)
-        labelWidget(self.mode, "Mode", 'Stimulator mode other than "Standard" only available for MagOption')
+        addLabel(self.mode, "Mode", 'Stimulator mode other than "Standard" only available for MagOption')
 
-        self.currentDirection = ttk.Combobox(basic_frame, values=("Normal","Reverse"), state="readonly")
+        self.currentDirection = ttk.Combobox(basicFrame, values=("Normal","Reverse"), state="readonly")
         self.currentDirection.place(x=116, y=70, width=80, height=22)
         self.currentDirection.current(0)
         self.currentDirection.bind("<<ComboboxSelected>>", currentDirection_cb)
-        labelWidget(self.currentDirection, "Current Direction")
+        addLabel(self.currentDirection, "Current Direction")
 
-        self.waveform = ttk.Combobox(basic_frame, values=("Biphasic",), state="readonly")
-        self.waveform.place(x=90, y=100, width=106, height=22)
+        self.waveform = ttk.Combobox(basicFrame, values=("Biphasic",), state="readonly")
+        self.waveform.place(x=86, y=100, width=110, height=22)
         self.waveform.current(0)
         self.waveform.bind("<<ComboboxSelected>>", waveform_cb)
-        labelWidget(self.waveform, "Waveform")
+        addLabel(self.waveform, "Waveform")
 
         def isFloat(P):
             try:
@@ -1173,59 +1179,59 @@ class TMS_GUI:
 
         vcmd = (self.root.register(isFloat), "%P")
         entryArg = {"justify":tk.RIGHT, "validate":"key", "validatecommand":vcmd}
-        BARatio = tk.Entry(basic_frame, textvariable=self.BARatio, **entryArg)
+        BARatio = tk.Entry(basicFrame, textvariable=self.BARatio, **entryArg)
         BARatio.place(x=160, y=130, width=36, height=22)
         BARatio.bind("<Return>", BARatio_cb)
         BARatio.bind("<FocusOut>", BARatio_cb)
-        self.h_BARatio = labelWidget(BARatio, "Pulse B/A Ratio", 'Amplitude ratio of Pulse B over Pulse A for Twin mode')
+        self.h_BARatio = addLabel(BARatio, "Pulse B/A Ratio", 'Amplitude ratio of Pulse B over Pulse A for Twin mode')
     
         # Burst Parameters
-        burstFrame = tk.LabelFrame(self.root, text="Burst Parameters", relief=tk.RIDGE, font=('Helvetica', 9, 'bold'))
+        burstFrame = tk.LabelFrame(self.root, text="Burst Parameters", relief=tk.RIDGE, font=fnt)
         burstFrame.place(x=31, y=288, width=206, height=94)
 
         burstPulses = tk.Spinbox(burstFrame, from_=2, to=5, justify=tk.RIGHT, command=burstPulses_cb, textvariable=self.burstPulses)
         burstPulses.place(x=163, y=10, width=34, height=22)
-        self.burstPulses_h = labelWidget(burstPulses, "Burst Pulses", 
+        self.burstPulses_h = addLabel(burstPulses, "Burst Pulses", 
             'Number of pulses in a burst (2 to 5).\nClick dial or press up/down arrow key to change')
         
         IPI = tk.Entry(burstFrame, textvariable=self.IPI, **entryArg)
         IPI.place(x=163, y=40, width=32, height=22)
         IPI.bind("<Return>", IPI_cb)
         IPI.bind("<FocusOut>", IPI_cb)
-        self.IPI_h = labelWidget(IPI, "Inter Pulse Interval (ms)", 
+        self.IPI_h = addLabel(IPI, "Inter Pulse Interval (ms)", 
             'Duration between the beginning of the first pulse to the beginning of the second pulse')
 
         # Coil Status
-        coil_frame = tk.LabelFrame(self.root, text="Coil Status", relief=tk.RIDGE, font=('Helvetica', 9, 'bold'))
-        coil_frame.place(x=256, y=10, width=206, height=122)
+        coilFrame = tk.LabelFrame(self.root, text="Coil Status", relief=tk.RIDGE, font=fnt)
+        coilFrame.place(x=256, y=10, width=206, height=122)
 
-        self.CoilType = tk.Label(coil_frame, anchor="e", relief='groove')
+        self.CoilType = tk.Label(coilFrame, anchor="e", relief='groove')
         self.CoilType.place(x=96, y=10, width=100, height=22)
-        labelWidget(self.CoilType, "Type/Number", 'Connected coil type or number')
+        addLabel(self.CoilType, "Type/Number", 'Connected coil type or number')
    
-        self.temperature = tk.Label(coil_frame, anchor="e", relief='groove')
+        self.temperature = tk.Label(coilFrame, anchor="e", relief='groove')
         self.temperature.place(x=165, y=40, width=31, height=22)
-        labelWidget(self.temperature, "Temperature (°C)", 'Coil temperature in Celsius')
+        addLabel(self.temperature, "Temperature (°C)", 'Coil temperature in Celsius')
 
-        self.didt = tk.Label(coil_frame, anchor="e", relief='groove')
+        self.didt = tk.Label(coilFrame, anchor="e", relief='groove')
         self.didt.place(x=140, y=70, width=56, height=22)
-        labelWidget(self.didt, "Realized di/dt (A/µs)", 'Coil current gradient')
+        addLabel(self.didt, "Realized di/dt (A/µs)", 'Coil current gradient')
    
         # Train Control
-        train_frame = tk.LabelFrame(self.root, text="Train Control", relief=tk.RIDGE, font=('Helvetica', 9, 'bold'))
-        train_frame.place(x=256, y=144, width=206, height=238)
+        trainFrame = tk.LabelFrame(self.root, text="Train Control", relief=tk.RIDGE, font=fnt)
+        trainFrame.place(x=256, y=144, width=206, height=238)
 
-        RepRate = tk.Entry(train_frame, textvariable=self.RepRate, **entryArg)
+        RepRate = tk.Entry(trainFrame, textvariable=self.RepRate, **entryArg)
         RepRate.place(x=160, y=10, width=36, height=22)
         RepRate.bind("<Return>", RepRate_cb)
         RepRate.bind("<FocusOut>", RepRate_cb)
-        labelWidget(RepRate, "Rep Rate (pps)", 'Number of pulses per second')
+        addLabel(RepRate, "Rep Rate (pps)", 'Number of pulses per second')
     
-        ITI = tk.Entry(train_frame, textvariable=self.ITI, **entryArg)
+        ITI = tk.Entry(trainFrame, textvariable=self.ITI, **entryArg)
         ITI.place(x=160, y=100, width=36, height=22)
         ITI.bind("<Return>", ITI_cb)
         ITI.bind("<FocusOut>", ITI_cb)
-        labelWidget(ITI, "Inter Train Interval (s)", 
+        addLabel(ITI, "Inter Train Interval (s)", 
             'The time interval between two trains described as\n'+
             'the time period between the last pulse in the first\n'+
             'train to the first pulse in the next train')
@@ -1238,33 +1244,33 @@ class TMS_GUI:
                 return False
 
         entryArg["validatecommand"] = (self.root.register(isInt), "%P")
-        PulsesInTrain = tk.Entry(train_frame, textvariable=self.PulsesInTrain, **entryArg)
+        PulsesInTrain = tk.Entry(trainFrame, textvariable=self.PulsesInTrain, **entryArg)
         PulsesInTrain.place(x=160, y=40, width=36, height=22)
         PulsesInTrain.bind("<Return>", PulsesInTrain_cb)
         PulsesInTrain.bind("<FocusOut>", PulsesInTrain_cb)
-        labelWidget(PulsesInTrain, "Pulses in Train", 'Number of pulses or bursts in each train')
+        addLabel(PulsesInTrain, "Pulses in Train", 'Number of pulses or bursts in each train')
     
-        NumberOfTrains = tk.Entry(train_frame, textvariable=self.NumberOfTrains, **entryArg)
+        NumberOfTrains = tk.Entry(trainFrame, textvariable=self.NumberOfTrains, **entryArg)
         NumberOfTrains.place(x=160, y=70, width=36, height=22)
         NumberOfTrains.bind("<Return>", NumberOfTrains_cb)
         NumberOfTrains.bind("<FocusOut>", NumberOfTrains_cb)
-        labelWidget(NumberOfTrains, "Number of Trains", 'Total amount of trains arriving in one sequence')
+        addLabel(NumberOfTrains, "Number of Trains", 'Total amount of trains arriving in one sequence')
     
-        PriorWarningSound = tk.Checkbutton(train_frame, text="", 
+        PriorWarningSound = tk.Checkbutton(trainFrame, text="", 
             variable=self.PriorWarningSound, command=PriorWarningSound_cb)
         PriorWarningSound.place(x=180, y=130, width=22, height=22)
-        labelWidget(PriorWarningSound, "Prior Warning Sound", 'When on, a beep will sound 2 seconds before each train')
+        addLabel(PriorWarningSound, "Prior Warning Sound", 'When on, a beep will sound 2 seconds before each train')
 
-        self.trainTime = tk.Label(train_frame, anchor="e", relief='groove')
+        self.trainTime = tk.Label(trainFrame, anchor="e", relief='groove')
         self.trainTime.place(x=140, y=160, width=56, height=22)
-        labelWidget(self.trainTime, "Total Time", 'Total time to run the sequence, based on above parameters')
+        addLabel(self.trainTime, "Total Time", 'Total time to run the sequence, based on above parameters')
    
-        self.fireTrain = tk.Button(train_frame, text="Start Train", command=T.fireTrain)
+        self.fireTrain = tk.Button(trainFrame, text="Start Train", command=T.fireTrain)
         self.fireTrain.place(x=52, y=190, width=100, height=24)
         Hovertip(self.fireTrain, 'Start / Stop train sequence')
     
         # Menus
-        menubar = tk.Menu(self.root)
+        menubar = tk.Menu(self.root); self.root.update()
         filemenu = tk.Menu(menubar, tearoff=0)
         filemenu.add_command(label="Load", command=T.load, underline=0)
         filemenu.add_command(label="Save", command=T.save, underline=0)
@@ -1274,8 +1280,8 @@ class TMS_GUI:
         serialmenu.add_command(label="Disconnect", command=self.on_closing, underline=0)
         menubar.add_cascade(label="Serial", menu=serialmenu)
         helpmenu = tk.Menu(menubar, tearoff=0)
-        helpmenu.add_command(label="Help about pytms", command=lambda:help("pytms"))
-        helpmenu.add_command(label="Help about the GUI", command=lambda:help(TMS_GUI))
+        helpmenu.add_command(label="Help about TMS()", command=lambda:help(TMS))
+        helpmenu.add_command(label="Help about TMS_GUI()", command=lambda:help(TMS_GUI))
         menubar.add_cascade(label="Help", menu=helpmenu)
         self.root.config(menu=menubar)
         self.update()
@@ -1332,6 +1338,6 @@ class TMS_GUI:
         except:
             self.EMGcheck.config(state=tk.DISABLED)
             self.motorThr.config(state=tk.DISABLED)
-            
+
 if __name__ == "__main__": TMS_GUI()
     
